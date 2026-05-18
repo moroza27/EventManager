@@ -411,6 +411,43 @@
         "build": {
           "build/net6.0/xunit.runner.visualstudio.props": {}
         }
+      },
+      "EventManager.Application/1.0.0": {
+        "type": "project",
+        "framework": ".NETCoreApp,Version=v9.0",
+        "dependencies": {
+          "EventManager.Domain": "1.0.0"
+        },
+        "compile": {
+          "bin/placeholder/EventManager.Application.dll": {}
+        },
+        "runtime": {
+          "bin/placeholder/EventManager.Application.dll": {}
+        }
+      },
+      "EventManager.Domain/1.0.0": {
+        "type": "project",
+        "framework": ".NETCoreApp,Version=v9.0",
+        "compile": {
+          "bin/placeholder/EventManager.Domain.dll": {}
+        },
+        "runtime": {
+          "bin/placeholder/EventManager.Domain.dll": {}
+        }
+      },
+      "EventManager.Infrastructure/1.0.0": {
+        "type": "project",
+        "framework": ".NETCoreApp,Version=v9.0",
+        "dependencies": {
+          "EventManager.Application": "1.0.0",
+          "EventManager.Domain": "1.0.0"
+        },
+        "compile": {
+          "bin/placeholder/EventManager.Infrastructure.dll": {}
+        },
+        "runtime": {
+          "bin/placeholder/EventManager.Infrastructure.dll": {}
+        }
       }
     }
   },
@@ -932,10 +969,28 @@
         "xunit.runner.visualstudio.2.8.2.nupkg.sha512",
         "xunit.runner.visualstudio.nuspec"
       ]
+    },
+    "EventManager.Application/1.0.0": {
+      "type": "project",
+      "path": "../../src/EventManager.Application/EventManager.Application.csproj",
+      "msbuildProject": "../../src/EventManager.Application/EventManager.Application.csproj"
+    },
+    "EventManager.Domain/1.0.0": {
+      "type": "project",
+      "path": "../../src/EventManager.Domain/EventManager.Domain.csproj",
+      "msbuildProject": "../../src/EventManager.Domain/EventManager.Domain.csproj"
+    },
+    "EventManager.Infrastructure/1.0.0": {
+      "type": "project",
+      "path": "../../src/EventManager.Infrastructure/EventManager.Infrastructure.csproj",
+      "msbuildProject": "../../src/EventManager.Infrastructure/EventManager.Infrastructure.csproj"
     }
   },
   "projectFileDependencyGroups": {
     "net9.0": [
+      "EventManager.Application >= 1.0.0",
+      "EventManager.Domain >= 1.0.0",
+      "EventManager.Infrastructure >= 1.0.0",
       "Microsoft.NET.Test.Sdk >= 17.12.0",
       "coverlet.collector >= 6.0.2",
       "xunit >= 2.9.2",
@@ -973,7 +1028,17 @@
       "frameworks": {
         "net9.0": {
           "targetAlias": "net9.0",
-          "projectReferences": {}
+          "projectReferences": {
+            "C:\\IPZ_college\\OOP\\OOP-MiniProject-Moroz\\src\\EventManager.Application\\EventManager.Application.csproj": {
+              "projectPath": "C:\\IPZ_college\\OOP\\OOP-MiniProject-Moroz\\src\\EventManager.Application\\EventManager.Application.csproj"
+            },
+            "C:\\IPZ_college\\OOP\\OOP-MiniProject-Moroz\\src\\EventManager.Domain\\EventManager.Domain.csproj": {
+              "projectPath": "C:\\IPZ_college\\OOP\\OOP-MiniProject-Moroz\\src\\EventManager.Domain\\EventManager.Domain.csproj"
+            },
+            "C:\\IPZ_college\\OOP\\OOP-MiniProject-Moroz\\src\\EventManager.Infrastructure\\EventManager.Infrastructure.csproj": {
+              "projectPath": "C:\\IPZ_college\\OOP\\OOP-MiniProject-Moroz\\src\\EventManager.Infrastructure\\EventManager.Infrastructure.csproj"
+            }
+          }
         }
       },
       "warningProperties": {

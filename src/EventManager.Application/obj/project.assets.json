@@ -1,11 +1,30 @@
 {
   "version": 3,
   "targets": {
-    "net9.0": {}
+    "net9.0": {
+      "EventManager.Domain/1.0.0": {
+        "type": "project",
+        "framework": ".NETCoreApp,Version=v9.0",
+        "compile": {
+          "bin/placeholder/EventManager.Domain.dll": {}
+        },
+        "runtime": {
+          "bin/placeholder/EventManager.Domain.dll": {}
+        }
+      }
+    }
   },
-  "libraries": {},
+  "libraries": {
+    "EventManager.Domain/1.0.0": {
+      "type": "project",
+      "path": "../EventManager.Domain/EventManager.Domain.csproj",
+      "msbuildProject": "../EventManager.Domain/EventManager.Domain.csproj"
+    }
+  },
   "projectFileDependencyGroups": {
-    "net9.0": []
+    "net9.0": [
+      "EventManager.Domain >= 1.0.0"
+    ]
   },
   "packageFolders": {
     "C:\\Users\\gn\\.nuget\\packages\\": {},
@@ -38,7 +57,11 @@
       "frameworks": {
         "net9.0": {
           "targetAlias": "net9.0",
-          "projectReferences": {}
+          "projectReferences": {
+            "C:\\IPZ_college\\OOP\\OOP-MiniProject-Moroz\\src\\EventManager.Domain\\EventManager.Domain.csproj": {
+              "projectPath": "C:\\IPZ_college\\OOP\\OOP-MiniProject-Moroz\\src\\EventManager.Domain\\EventManager.Domain.csproj"
+            }
+          }
         }
       },
       "warningProperties": {
