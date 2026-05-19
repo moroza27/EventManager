@@ -1,4 +1,3 @@
-// Шлях: src/EventManager.Application/Services/EventService.cs
 using EventManager.Application.Common;
 using EventManager.Domain.Entities;
 using EventManager.Domain.Enums;
@@ -10,11 +9,16 @@ public class EventService
 {
     private readonly IEventRepository _eventRepository;
     private readonly IRegistrationRepository _registrationRepository;
+    private readonly IEventObserver _eventObserver;
 
-    public EventService(IEventRepository eventRepository, IRegistrationRepository registrationRepository)
+    public EventService(
+        IEventRepository eventRepository, 
+        IRegistrationRepository registrationRepository,
+        IEventObserver eventObserver)
     {
         _eventRepository = eventRepository;
         _registrationRepository = registrationRepository;
+        _eventObserver = eventObserver;
     }
 
     public Result<Event> CreateEvent(
@@ -62,4 +66,64 @@ public class EventService
     }
 
     public List<Event> GetAllEvents() => _eventRepository.GetAll();
+    public Result CancelEvent(Guid eventId)
+    {
+        try
+        {
+            var eventItem = _eventRepository.GetById(eventId);
+            if (eventItem is null)
+            {
+                return Result.Failure("Event not found.");
+            }
+
+            eventItem.AttachObserver(_eventObserver);
+            
+            eventItem.CancelEvent();
+
+            return Result.Success();
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Result.Failure(ex.Message);
+        }
+    }
+
+    public async Task SaveDataAsync()
+    {
+        await _eventRepository.SaveAsync();
+    }
+
+    public async Task LoadDataAsync()
+    {
+        await _eventRepository.LoadAsync();
+    }
+
+    public List<Event> GetAvailableEvents()
+    {
+        return _eventRepository.GetAll()
+            .Where(e => e.Status == EventStatus.Open && e.HasAvailablePlaces())
+            .ToList();
+    }
+
+    public List<Event> GetTopPopularEvents(int count)
+    {
+        return _eventRepository.GetAll()
+            .OrderByDescending(e => e.Registrations.Count)
+            .Take(count)
+            .ToList();
+    }
+
+    public Dictionary<EventCategory, int> GetEventCountByCategory()
+    {
+        return _eventRepository.GetAll()
+            .GroupBy(e => e.Category)
+            .ToDictionary(g => g.Key, g => g.Count());
+    }
+
+    public int GetTotalCapacityOfOpenEvents()
+    {
+        return _eventRepository.GetAll()
+            .Where(e => e.Status == EventStatus.Open)
+            .Sum(e => e.Capacity);
+    }
 }

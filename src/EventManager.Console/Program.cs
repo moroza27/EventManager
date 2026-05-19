@@ -1,195 +1,158 @@
-﻿using EventManager.Application.Services;
+﻿using EventManager.Application.Common;
+using EventManager.Application.Services;
+using EventManager.Domain.Entities;
 using EventManager.Domain.Enums;
+using EventManager.Domain.Interfaces;
 using EventManager.Infrastructure.Repositories;
 
-var eventRepository = new InMemoryEventRepository();
-var registrationRepository = new InMemoryRegistrationRepository();
-var eventService = new EventService(eventRepository, registrationRepository);
+namespace EventManager.ConsoleApp;
 
-bool isRunning = true;
-
-var menuActions = new Dictionary<string, (string Description, Action Action)>
+public class InMemoryRegistrationRepository : IRegistrationRepository
 {
-    { "1", ("Create event", new Action(() => CreateEvent(eventService))) },
-    { "2", ("Register participant", new Action(() => RegisterParticipant(eventService))) },
-    { "3", ("Show events", new Action(() => ShowEvents(eventService))) },
-    { "0", ("Exit", new Action(() => isRunning = false)) }
-};
+    private readonly List<Registration> _registrations = new();
+    public void Add(Registration registration) => _registrations.Add(registration);
+    public List<Registration> GetAll() => _registrations;
+}
 
-while (isRunning)
+class Program
 {
-    Console.WriteLine("\n=== EventManager ===");
-    foreach (var item in menuActions)
+    static async Task Main(string[] args)
     {
-        Console.WriteLine($"{item.Key}. {item.Value.Description}");
-    }
-    Console.Write("Choose option: ");
+        var eventRepository = new JsonEventRepository();
+        var registrationRepository = new InMemoryRegistrationRepository();
+        var observer = new EmailNotificationObserver();
+        
+        var service = new EventService(eventRepository, registrationRepository, observer);
+        await service.LoadDataAsync();
 
-    string? option = Console.ReadLine();
+        Console.ForegroundColor = ConsoleColor.Green;
+        Console.WriteLine($"Loaded {service.GetAllEvents().Count} event(s) from persistent storage.");
+        Console.ResetColor();
 
-    if (!string.IsNullOrWhiteSpace(option) && menuActions.ContainsKey(option))
-    {
-        try
+        bool running = true;
+        while (running)
         {
-            menuActions[option].Action();
+            Console.ForegroundColor = ConsoleColor.Cyan;
+            Console.WriteLine("=== EVENT MANAGER MENU ===");
+            Console.ResetColor();
+            Console.WriteLine("1. Create New Event");
+            Console.WriteLine("2. Register Participant to Event");
+            Console.WriteLine("3. Cancel Event (Trigger Observer)");
+            Console.WriteLine("4. View All Events & Statuses");
+            Console.WriteLine("5. Open Analytics & LINQ Dashboard");
+            Console.WriteLine("6. Save & Exit");
+            Console.Write("\nChoose an option: ");
+
+            string? choice = Console.ReadLine();
+            Console.WriteLine();
+
+            // Визначаємо перше доступне значення з твого енуму EventCategory динамічно,
+            // щоб не закладатися на конкретні назви на кшталт Tech чи Business
+            var defaultCategory = Enum.GetValues<EventCategory>().Cast<EventCategory>().First();
+
+            switch (choice)
+            {
+                case "1":
+                    Console.Write("Enter event title: ");
+                    string title = Console.ReadLine() ?? "";
+                    Console.Write("Enter description: ");
+                    string desc = Console.ReadLine() ?? "";
+                    Console.Write("Enter days from today: ");
+                    if (!int.TryParse(Console.ReadLine(), out int days)) days = 1;
+                    Console.Write("Enter capacity: ");
+                    if (!int.TryParse(Console.ReadLine(), out int cap)) cap = 10;
+
+                    var createResult = service.CreateEvent(
+                        title, desc, DateTime.Now.AddDays(days), cap,
+                        "Main Hall", "Stepana Bandery St, 12", 
+                        "Alex Green", "alex@events.com", 
+                        defaultCategory
+                    );
+                    
+                    if (createResult.IsSuccess)
+                        Console.WriteLine("Success: Event created successfully!");
+                    else
+                        Console.WriteLine($"Error: {createResult.Error}");
+                    break;
+
+                case "2":
+                    ShowShortEventsList(service.GetAllEvents());
+                    Console.Write("Enter Event ID: ");
+                    if (Guid.TryParse(Console.ReadLine(), out Guid eId))
+                    {
+                        Console.Write("Enter Name: ");
+                        string pName = Console.ReadLine() ?? "Guest";
+                        Console.Write("Enter Email: ");
+                        string pEmail = Console.ReadLine() ?? "guest@test.com";
+                        
+                        var regResult = service.RegisterParticipant(eId, pName, pEmail);
+                        PrintResult(regResult, "Participant registered successfully!");
+                    }
+                    break;
+
+                case "3":
+                    ShowShortEventsList(service.GetAllEvents());
+                    Console.Write("Enter Event ID to CANCEL: ");
+                    if (Guid.TryParse(Console.ReadLine(), out Guid cancelId))
+                    {
+                        var cancelResult = service.CancelEvent(cancelId);
+                        PrintResult(cancelResult, "Event has been cancelled!");
+                    }
+                    break;
+
+                case "4":
+                    var list = service.GetAllEvents();
+                    if (!list.Any()) Console.WriteLine("No events found.");
+                    foreach (var ev in list)
+                    {
+                        Console.WriteLine($"[{ev.Status}] {ev.Title} (ID: {ev.Id}) - Category: {ev.Category}, Registered: {ev.Registrations.Count}/{ev.Capacity}");
+                    }
+                    break;
+
+                case "5":
+                    OpenAnalyticsDashboard(service);
+                    break;
+
+                case "6":
+                    await service.SaveDataAsync();
+                    Console.WriteLine("State saved to persistent storage.");
+                    running = false;
+                    break;
+
+                default:
+                    Console.WriteLine("Invalid option.");
+                    break;
+            }
+            Console.WriteLine("\nPress any key...");
+            Console.ReadKey();
+            Console.Clear();
         }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error: {ex.Message}");
-        }
-    }
-    else
-    {
-        Console.WriteLine("Invalid option. Please enter a valid menu item.");
-    }
-}
-
-static void CreateEvent(EventService eventService)
-{
-    string title = ReadRequiredString("Title: ");
-    string description = ReadRequiredString("Description: ");
-    int capacity = ReadPositiveInt("Capacity: ");
-    DateTime date = ReadFutureDate("Event date (yyyy-MM-dd): ");
-    string venueName = ReadRequiredString("Venue name: ");
-    string venueAddress = ReadRequiredString("Venue address: ");
-    string organizerName = ReadRequiredString("Organizer name: ");
-    string organizerEmail = ReadRequiredString("Organizer email: ");
-
-    var result = eventService.CreateEvent(
-        title,
-        description,
-        date,
-        capacity,
-        venueName,
-        venueAddress,
-        organizerName,
-        organizerEmail,
-        EventCategory.Conference);
-
-    if (result.IsSuccess)
-    {
-        Console.WriteLine($"Event created: {result.Value!.Title}");
-    }
-    else
-    {
-        Console.WriteLine($"Failed to create event: {result.Error}");
-    }
-}
-
-static void RegisterParticipant(EventService eventService)
-{
-    var events = eventService.GetAllEvents();
-
-    if (!events.Any())
-    {
-        Console.WriteLine("No events available.");
-        return;
     }
 
-    Console.WriteLine("Available events:");
-    foreach (var eventItem in events)
+    static void OpenAnalyticsDashboard(EventService service)
     {
-        Console.WriteLine($"{eventItem.Id} | {eventItem.Title} | Date: {eventItem.Date:yyyy-MM-dd} | Registered: {eventItem.Registrations.Count}/{eventItem.Capacity} | Status: {eventItem.Status}");
+        Console.Clear();
+        Console.ForegroundColor = ConsoleColor.Yellow;
+        Console.WriteLine("=== LINQ ANALYTICS DASHBOARD ===");
+        Console.ResetColor();
+        
+        var available = service.GetAvailableEvents();
+        Console.WriteLine($"\n[1. Available Events]: {available.Count}");
+
+        var top = service.GetTopPopularEvents(3);
+        Console.WriteLine($"[2. Top Popular Events]: {top.Count}");
+
+        var totalCapacity = service.GetTotalCapacityOfOpenEvents();
+        Console.WriteLine($"[3. Global Capacity of Open Events]: {totalCapacity}");
     }
 
-    Guid eventId = ReadGuid("Enter event id: ");
-    string name = ReadRequiredString("Participant name: ");
-    string email = ReadRequiredString("Participant email: ");
-
-    var result = eventService.RegisterParticipant(eventId, name, email);
-
-    if (result.IsSuccess)
+    static void ShowShortEventsList(List<Event> events)
     {
-        Console.WriteLine("Participant registered successfully.");
-    }
-    else
-    {
-        Console.WriteLine($"Registration failed: {result.Error}");
-    }
-}
-
-static void ShowEvents(EventService eventService)
-{
-    var events = eventService.GetAllEvents();
-
-    if (!events.Any())
-    {
-        Console.WriteLine("No events found.");
-        return;
+        foreach (var e in events) Console.WriteLine($"ID: {e.Id} | Title: {e.Title} [{e.Status}]");
     }
 
-    foreach (var eventItem in events)
+    static void PrintResult(Result result, string msg)
     {
-        Console.WriteLine("----------------------");
-        Console.WriteLine($"Id: {eventItem.Id}");
-        Console.WriteLine($"Title: {eventItem.Title}");
-        Console.WriteLine($"Date: {eventItem.Date:yyyy-MM-dd}");
-        Console.WriteLine($"Venue: {eventItem.Venue.Name}, {eventItem.Venue.Address}");
-        Console.WriteLine($"Organizer: {eventItem.Organizer.FullName} ({eventItem.Organizer.Email})");
-        Console.WriteLine($"Capacity: {eventItem.Capacity}");
-        Console.WriteLine($"Registered: {eventItem.Registrations.Count}");
-        Console.WriteLine($"Available places: {Math.Max(0, eventItem.Capacity - eventItem.Registrations.Count)}");
-        Console.WriteLine($"Status: {eventItem.Status}");
-        Console.WriteLine($"Category: {eventItem.Category}");
-    }
-}
-
-static string ReadRequiredString(string prompt)
-{
-    while (true)
-    {
-        Console.Write(prompt);
-        string? input = Console.ReadLine();
-        if (!string.IsNullOrWhiteSpace(input))
-        {
-            return input.Trim();
-        }
-
-        Console.WriteLine("Value cannot be empty. Please try again.");
-    }
-}
-
-static int ReadPositiveInt(string prompt)
-{
-    while (true)
-    {
-        Console.Write(prompt);
-        string? input = Console.ReadLine();
-        if (int.TryParse(input, out var value) && value > 0)
-        {
-            return value;
-        }
-
-        Console.WriteLine("Please enter a positive integer.");
-    }
-}
-
-static DateTime ReadFutureDate(string prompt)
-{
-    while (true)
-    {
-        Console.Write(prompt);
-        string? input = Console.ReadLine();
-        if (DateTime.TryParse(input, out var date) && date.Date > DateTime.Now.Date)
-        {
-            return date;
-        }
-
-        Console.WriteLine("Please enter a valid future date in the format yyyy-MM-dd.");
-    }
-}
-
-static Guid ReadGuid(string prompt)
-{
-    while (true)
-    {
-        Console.Write(prompt);
-        string? input = Console.ReadLine();
-        if (Guid.TryParse(input, out var id))
-        {
-            return id;
-        }
-
-        Console.WriteLine("Please enter a valid GUID.");
+        Console.WriteLine(result.IsSuccess ? $"Success: {msg}" : $"Error: {result.Error}");
     }
 }

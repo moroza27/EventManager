@@ -35,14 +35,25 @@
 
 Console -> Application -> Domain -> Infrastructure
 
+```mermaid
 classDiagram
     class BaseEntity {
         <<abstract>>
         +Guid Id
     }
 
+    class IEventObserver {
+        <<interface>>
+        +OnEventCancelled(Event cancelledEvent) void
+    }
+
+    class EmailNotificationObserver {
+        +OnEventCancelled(Event cancelledEvent) void
+    }
+
     class Event {
         -List~Registration~ _registrations
+        -List~IEventObserver~ _observers
         +string Title
         +string Description
         +DateTime Date
@@ -55,6 +66,8 @@ classDiagram
         +this[Guid participantId] Registration?
         +HasAvailablePlaces() bool
         +AddRegistration(Registration registration)
+        +AttachObserver(IEventObserver observer) void
+        +CancelEvent() void
     }
 
     class Venue {
@@ -88,3 +101,8 @@ classDiagram
     Event "1" *-- "1" Venue : Відбувається в
     Event "1" *-- "1" Organizer : Організується
     Event "1" *-- "0..*" Registration : Містить
+    
+    IEventObserver <|.. EmailNotificationObserver : реалізує
+    Event "1" o-- "0..*" IEventObserver : агрегує
+
+```

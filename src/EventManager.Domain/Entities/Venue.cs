@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace EventManager.Domain.Entities;
 
 public class Venue : BaseEntity
@@ -5,6 +7,15 @@ public class Venue : BaseEntity
     public string Name { get; private set; }
     public string Address { get; private set; }
     public int MaxCapacity { get; private set; }
+
+    [JsonConstructor]
+    public Venue(Guid id, string name, string address, int maxCapacity)
+    {
+        Id = id;
+        Name = name;
+        Address = address;
+        MaxCapacity = maxCapacity;
+    }
 
     public Venue(string name, string address, int maxCapacity)
     {
