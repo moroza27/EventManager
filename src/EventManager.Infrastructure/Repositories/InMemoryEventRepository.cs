@@ -1,5 +1,7 @@
 using EventManager.Domain.Entities;
 using EventManager.Domain.Interfaces;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace EventManager.Infrastructure.Repositories;
 
@@ -21,4 +23,7 @@ public class InMemoryEventRepository : IEventRepository
     {
         return _events;
     }
+
+    public Task SaveAsync(CancellationToken c = default) => Task.CompletedTask;
+    public Task LoadAsync(CancellationToken c = default) => Task.CompletedTask;
 }

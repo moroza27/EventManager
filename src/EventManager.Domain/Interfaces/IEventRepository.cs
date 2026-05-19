@@ -9,4 +9,6 @@ public interface IEventRepository
     Event? GetById(Guid id);
 
     List<Event> GetAll();
+    Task SaveAsync(CancellationToken cancellationToken = default);
+    Task LoadAsync(CancellationToken cancellationToken = default);
 }
