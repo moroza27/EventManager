@@ -1,0 +1,71 @@
+name: CI - Build, Test & Coverage
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --no-restore --configuration Release
+
+      - name: Install ReportGenerator
+        run: dotnet tool install -g dotnet-reportgenerator-globaltool
+
+      - name: Add coverlet.collector to test project
+        run: |
+          dotnet add tests/EventManager.Tests/EventManager.Tests.csproj package coverlet.collector --version 3.2.0
+
+      - name: Run tests with coverage
+        run: |
+          mkdir -p TestResults
+          dotnet test tests/EventManager.Tests/EventManager.Tests.csproj --no-build --configuration Release --results-directory TestResults --collect:"XPlat Code Coverage"
+
+      - name: Locate coverage file
+        id: findcov
+        run: |
+          echo "Searching for coverage files..."
+          COV_FILE=$(find . -type f -name 'coverage.cobertura.xml' -print -quit || true)
+          if [ -z "$COV_FILE" ]; then
+            COV_FILE=$(find TestResults -type f -name '*.cobertura.xml' -print -quit || true)
+          fi
+          echo "coverage-file=$COV_FILE" >> $GITHUB_OUTPUT
+
+      - name: Generate HTML coverage report
+        if: steps.findcov.outputs.coverage-file != ''
+        run: |
+          reportgenerator -reports:"${{ steps.findcov.outputs.coverage-file }}" -targetdir:TestResults/CoverageReport -reporttypes:Html
+
+      - name: Upload coverage report artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: TestResults/CoverageReport
+
+      - name: Upload raw coverage (artifact)
+        if: steps.findcov.outputs.coverage-file != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-xml
+          path: ${{ steps.findcov.outputs.coverage-file }}
+
+      # Optional Codecov step (requires CODECOV_TOKEN for private repos)
+      # - name: Upload to Codecov
+      #   uses: codecov/codecov-action@v4
+      #   with:
+      #     files: TestResults/coverage.cobertura.xml

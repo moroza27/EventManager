@@ -7,8 +7,8 @@ namespace EventManager.Domain.Entities;
 
 public class Event : BaseEntity
 {
-    private readonly List<Registration> _registrations = new();
-    private readonly List<IEventObserver> _observers = new();
+    private readonly RegistrationsManager _registrations = new();
+    private readonly EventObserversManager _observers = new();
 
     [JsonInclude]
     public string Title { get; private set; } = string.Empty;
@@ -37,19 +37,11 @@ public class Event : BaseEntity
     [JsonIgnore]
     public IReadOnlyCollection<Registration> Registrations => _registrations.AsReadOnly();
 
-    [JsonInclude]
-    [JsonPropertyName("Registrations")]
+    // Keep JSON shape compatible with previous implementation
     public List<Registration> RegistrationsInternal
     {
-        get => _registrations;
-        private set
-        {
-            _registrations.Clear();
-            if (value != null)
-            {
-                _registrations.AddRange(value);
-            }
-        }
+        get => _registrations.InternalList;
+        private set => _registrations.InternalList = value;
     }
 
     public Event()
@@ -59,13 +51,13 @@ public class Event : BaseEntity
 
     public Event(string title, string description, DateTime date, int capacity, Venue venue, Organizer organizer, EventCategory category)
     {
-        if (string.IsNullOrWhiteSpace(title)) 
+        if (string.IsNullOrWhiteSpace(title))
             throw new ArgumentException("Event title cannot be empty.");
 
-        if (date < DateTime.Now) 
+        if (date < DateTime.Now)
             throw new ArgumentException("Event date cannot be in the past.");
 
-        if (capacity <= 0) 
+        if (capacity <= 0)
             throw new ArgumentException("Capacity must be greater than zero.");
 
         Title = title; Description = description; Date = date; Capacity = capacity;
@@ -73,14 +65,14 @@ public class Event : BaseEntity
         Status = EventStatus.Open;
     }
 
-    public bool HasAvailablePlaces() => _registrations.Count < Capacity;
+    public bool HasAvailablePlaces() => _registrations.HasAvailablePlaces(Capacity);
 
     public void AddRegistration(Registration registration)
     {
         if (Status != EventStatus.Open)
             throw new DomainException($"Cannot register. Event status is {Status}.");
 
-        if (_registrations.Any(r => r.ParticipantId == registration.ParticipantId))
+        if (_registrations.IsAlreadyRegistered(registration.ParticipantId))
             throw new DomainException("Participant is already registered for this event.");
 
         if (!HasAvailablePlaces())
@@ -89,7 +81,7 @@ public class Event : BaseEntity
         _registrations.Add(registration);
     }
 
-    public void AttachObserver(IEventObserver observer) => _observers.Add(observer);
+    public void AttachObserver(IEventObserver observer) => _observers.Attach(observer);
 
     public void CancelEvent()
     {
@@ -100,9 +92,6 @@ public class Event : BaseEntity
 
         Status = EventStatus.Cancelled;
 
-        foreach (var observer in _observers)
-        {
-            observer.OnEventCancelled(this);
-        }
+        _observers.NotifyCancelled(this);
     }
 }
