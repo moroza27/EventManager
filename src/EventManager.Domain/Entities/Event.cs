@@ -1,5 +1,6 @@
 using System.Text.Json.Serialization;
 using EventManager.Domain.Enums;
+using EventManager.Domain.Exceptions;
 using EventManager.Domain.Interfaces;
 
 namespace EventManager.Domain.Entities;
@@ -10,10 +11,10 @@ public class Event : BaseEntity
     private readonly List<IEventObserver> _observers = new();
 
     [JsonInclude]
-    public string Title { get; private set; }
+    public string Title { get; private set; } = string.Empty;
 
     [JsonInclude]
-    public string Description { get; private set; }
+    public string Description { get; private set; } = string.Empty;
 
     [JsonInclude]
     public DateTime Date { get; private set; }
@@ -22,10 +23,10 @@ public class Event : BaseEntity
     public int Capacity { get; private set; }
 
     [JsonInclude]
-    public Venue Venue { get; private set; }
+    public Venue Venue { get; private set; } = default!;
 
     [JsonInclude]
-    public Organizer Organizer { get; private set; }
+    public Organizer Organizer { get; private set; } = default!;
 
     [JsonInclude]
     public EventStatus Status { get; private set; }
@@ -76,11 +77,14 @@ public class Event : BaseEntity
 
     public void AddRegistration(Registration registration)
     {
-        if (Status != EventStatus.Open) 
-            throw new InvalidOperationException($"Cannot register. Event status is {Status}.");
+        if (Status != EventStatus.Open)
+            throw new DomainException($"Cannot register. Event status is {Status}.");
 
-        if (!HasAvailablePlaces()) 
-            throw new InvalidOperationException("No available places.");
+        if (_registrations.Any(r => r.ParticipantId == registration.ParticipantId))
+            throw new DomainException("Participant is already registered for this event.");
+
+        if (!HasAvailablePlaces())
+            throw new DomainException("No available places.");
 
         _registrations.Add(registration);
     }
@@ -91,7 +95,7 @@ public class Event : BaseEntity
     {
         if (Status == EventStatus.Cancelled || Status == EventStatus.Closed)
         {
-            throw new InvalidOperationException("Cannot cancel an event that is already Cancelled or Closed.");
+            throw new DomainException("Cannot cancel an event that is already Cancelled or Closed.");
         }
 
         Status = EventStatus.Cancelled;

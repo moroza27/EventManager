@@ -14,14 +14,30 @@ public class InMemoryEventRepository : IEventRepository
         _events.Add(eventItem);
     }
 
+    public Task AddAsync(Event eventItem, CancellationToken cancellationToken = default)
+    {
+        _events.Add(eventItem);
+        return Task.CompletedTask;
+    }
+
     public Event? GetById(Guid id)
     {
         return _events.FirstOrDefault(e => e.Id == id);
     }
 
+    public Task<Event?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        return Task.FromResult(_events.FirstOrDefault(e => e.Id == id));
+    }
+
     public List<Event> GetAll()
     {
         return _events;
+    }
+
+    public Task<List<Event>> GetAllAsync(CancellationToken cancellationToken = default)
+    {
+        return Task.FromResult(_events);
     }
 
     public Task SaveAsync(CancellationToken c = default) => Task.CompletedTask;

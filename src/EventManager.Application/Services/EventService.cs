@@ -1,88 +1,113 @@
 using EventManager.Application.Common;
-using EventManager.Domain.Entities;
-using EventManager.Domain.Enums;
 using EventManager.Domain.Interfaces;
+using EventManager.Domain.Entities;
+using EventManager.Domain.Exceptions;
+using EventManager.Domain.Enums;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace EventManager.Application.Services;
 
 public class EventService
 {
-    private readonly IEventRepository _eventRepository;
-    private readonly IRegistrationRepository _registrationRepository;
-    private readonly IEventObserver _eventObserver;
+    private readonly IEventRepository _repository;
+    private readonly IRegistrationRepository? _registrationRepository;
+    private readonly IEventObserver? _observer;
 
+    public EventService(IEventRepository repository)
+    {
+        _repository = repository;
+    }
+
+    // Compatibility constructor used by Console app (no logic change, just adapters)
     public EventService(
-        IEventRepository eventRepository, 
+        IEventRepository repository,
         IRegistrationRepository registrationRepository,
-        IEventObserver eventObserver)
+        IEventObserver observer)
     {
-        _eventRepository = eventRepository;
+        _repository = repository;
         _registrationRepository = registrationRepository;
-        _eventObserver = eventObserver;
-    }
+        _observer = observer;
 
-    public Result<Event> CreateEvent(
-        string title, string description, DateTime date, int capacity,
-        string venueName, string venueAddress, string organizerName, string organizerEmail,
-        EventCategory category)
-    {
-        try
+        // Attach observer to currently loaded events if any
+        var events = _repository.GetAll();
+        foreach (var ev in events)
         {
-            var venue = new Venue(venueName, venueAddress, capacity);
-            var organizer = new Organizer(organizerName, organizerEmail);
-            var eventItem = new Event(title, description, date, capacity, venue, organizer, category);
-
-            _eventRepository.Add(eventItem);
-            return Result<Event>.Success(eventItem);
-        }
-        catch (ArgumentException ex)
-        {
-            return Result<Event>.Failure(ex.Message);
+            ev.AttachObserver(_observer);
         }
     }
 
-    public Result RegisterParticipant(Guid eventId, string participantName, string participantEmail)
+    public async Task<Result> CreateEventAsync(Event eventEntity)
     {
         try
         {
-            var eventItem = _eventRepository.GetById(eventId);
-            if (eventItem is null)
-            {
-                return Result.Failure("Event not found.");
-            }
-
-            var participant = new Participant(participantName, participantEmail);
-            var registration = new Registration(eventItem.Id, participant.Id);
-
-            eventItem.AddRegistration(registration);
-            _registrationRepository.Add(registration);
+            await _repository.AddAsync(eventEntity);
+            await _repository.SaveAsync();
 
             return Result.Success();
         }
-        catch (Exception ex) when (ex is ArgumentException || ex is InvalidOperationException)
+        catch (Exception ex)
         {
             return Result.Failure(ex.Message);
         }
     }
 
-    public List<Event> GetAllEvents() => _eventRepository.GetAll();
+    // Console-friendly synchronous wrapper used by Program.cs
+    public Result CreateEvent(string title, string description, DateTime date, int capacity,
+        string venueName, string venueAddress,
+        string organizerName, string organizerEmail,
+        EventCategory category)
+    {
+        var venue = new Domain.Entities.Venue(venueName, venueAddress, capacity);
+        var organizer = new Domain.Entities.Organizer(organizerName, organizerEmail);
+        var ev = new Event(title, description, date, capacity, venue, organizer, category);
+
+        // Attach observer if provided
+        if (_observer != null) ev.AttachObserver(_observer);
+
+        var res = CreateEventAsync(ev).GetAwaiter().GetResult();
+        return res;
+    }
+
+    public async Task LoadDataAsync()
+    {
+        await _repository.LoadAsync();
+        // Re-attach observer to events after load
+        if (_observer != null)
+        {
+            foreach (var ev in _repository.GetAll()) ev.AttachObserver(_observer);
+        }
+    }
+
+    public List<Event> GetAllEvents()
+    {
+        return _repository.GetAll();
+    }
+
+    public Result RegisterParticipant(Guid eventId, string name, string email)
+    {
+        var participant = new Participant(name, email);
+        var res = RegisterParticipantAsync(eventId, participant).GetAwaiter().GetResult();
+        if (res.IsSuccess && _registrationRepository != null)
+        {
+            // persist registration to repository
+            var registration = new Registration(eventId, participant.Id);
+            _registrationRepository.Add(registration);
+        }
+        return res;
+    }
+
     public Result CancelEvent(Guid eventId)
     {
+        var ev = _repository.GetById(eventId);
+        if (ev is null) return Result.Failure("Event not found.");
         try
         {
-            var eventItem = _eventRepository.GetById(eventId);
-            if (eventItem is null)
-            {
-                return Result.Failure("Event not found.");
-            }
-
-            eventItem.AttachObserver(_eventObserver);
-            
-            eventItem.CancelEvent();
-
+            ev.CancelEvent();
+            _repository.SaveAsync().GetAwaiter().GetResult();
             return Result.Success();
         }
-        catch (InvalidOperationException ex)
+        catch (Exception ex)
         {
             return Result.Failure(ex.Message);
         }
@@ -90,40 +115,60 @@ public class EventService
 
     public async Task SaveDataAsync()
     {
-        await _eventRepository.SaveAsync();
-    }
-
-    public async Task LoadDataAsync()
-    {
-        await _eventRepository.LoadAsync();
+        await _repository.SaveAsync();
     }
 
     public List<Event> GetAvailableEvents()
     {
-        return _eventRepository.GetAll()
-            .Where(e => e.Status == EventStatus.Open && e.HasAvailablePlaces())
-            .ToList();
+        return _repository.GetAll().Where(e => e.HasAvailablePlaces() && e.Status == EventStatus.Open).ToList();
     }
 
-    public List<Event> GetTopPopularEvents(int count)
+    public List<Event> GetTopPopularEvents(int topN)
     {
-        return _eventRepository.GetAll()
-            .OrderByDescending(e => e.Registrations.Count)
-            .Take(count)
-            .ToList();
-    }
-
-    public Dictionary<EventCategory, int> GetEventCountByCategory()
-    {
-        return _eventRepository.GetAll()
-            .GroupBy(e => e.Category)
-            .ToDictionary(g => g.Key, g => g.Count());
+        return _repository.GetAll().OrderByDescending(e => e.Registrations.Count).Take(topN).ToList();
     }
 
     public int GetTotalCapacityOfOpenEvents()
     {
-        return _eventRepository.GetAll()
-            .Where(e => e.Status == EventStatus.Open)
-            .Sum(e => e.Capacity);
+        return _repository.GetAll().Where(e => e.Status == EventStatus.Open).Sum(e => e.Capacity);
+    }
+
+    public Dictionary<EventCategory, int> GetEventCountByCategory()
+    {
+        return _repository.GetAll()
+            .GroupBy(e => e.Category)
+            .ToDictionary(g => g.Key, g => g.Count());
+    }
+
+    public async Task<Result> RegisterParticipantAsync(
+        Guid eventId,
+        Participant participant)
+    {
+        var eventEntity = await _repository.GetByIdAsync(eventId);
+
+        if (eventEntity is null)
+        {
+            return Result.Failure("Event not found.");
+        }
+
+        try
+        {
+
+            var registration = new Registration(eventId, participant.Id);
+            eventEntity.AddRegistration(registration);
+
+            await _repository.SaveAsync();
+
+            return Result.Success();
+        }
+        catch (DomainException ex)
+        {
+            return Result.Failure(ex.Message);
+        }
+    }
+
+    public async Task<List<Event>> GetAllAsync()
+    {
+        return await _repository.GetAllAsync();
     }
 }
