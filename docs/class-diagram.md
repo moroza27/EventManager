@@ -125,7 +125,7 @@ classDiagram
     class RegistrationsManager {
         -List~Registration~ _registrations
         +IReadOnlyCollection~Registration~ AsReadOnly()
-        +List~Registration~ InternalList {get;set;}
+        +List~Registration~ InternalList
         +HasAvailablePlaces(int capacity) bool
         +IsAlreadyRegistered(Guid participantId) bool
         +Add(Registration registration) void

@@ -37,7 +37,6 @@ public class Event : BaseEntity
     [JsonIgnore]
     public IReadOnlyCollection<Registration> Registrations => _registrations.AsReadOnly();
 
-    // Keep JSON shape compatible with previous implementation
     public List<Registration> RegistrationsInternal
     {
         get => _registrations.InternalList;
