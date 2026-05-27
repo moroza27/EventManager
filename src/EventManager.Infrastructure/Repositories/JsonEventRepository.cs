@@ -25,8 +25,17 @@ public class JsonEventRepository : IEventRepository
     }
 
     public void Add(Event eventItem) => _events.Add(eventItem);
+    public Task AddAsync(Event eventItem, CancellationToken cancellationToken = default)
+    {
+        _events.Add(eventItem);
+        return Task.CompletedTask;
+    }
     public Event? GetById(Guid id) => _events.FirstOrDefault(e => e.Id == id);
+    public Task<Event?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
+        => Task.FromResult(_events.FirstOrDefault(e => e.Id == id));
     public List<Event> GetAll() => _events;
+    public Task<List<Event>> GetAllAsync(CancellationToken cancellationToken = default)
+        => Task.FromResult(_events);
 
     public async Task SaveAsync(CancellationToken cancellationToken = default)
     {
